@@ -1,11 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_time_picker_spinner/flutter_time_picker_spinner.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:alarm_with_bank_transfer/views/alarm_manager.dart';
 import 'package:alarm_with_bank_transfer/views/dialog.dart';
 import 'package:alarm_with_bank_transfer/views/setting.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_time_picker_spinner/flutter_time_picker_spinner.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AlarmTab extends StatefulWidget {
   @override
@@ -16,8 +14,6 @@ class _AlarmTabState extends State<AlarmTab> {
   SharedPreferences prefs;
   DateTime _alarmTime;
   String _targetTime;
-  String _date = DateFormat('yyyy-MM-dd').format(DateTime.now());
-  String _targetDateTime;
   String initTime = '00:00';
   bool doesExist;
   bool isLoad;
@@ -25,38 +21,66 @@ class _AlarmTabState extends State<AlarmTab> {
   @override
   void initState() {
     isLoad = false;
-    DateTime _now = DateTime.now();
-    loadData().then((value) {
-      setState(() {
-        isLoad = value;
-      });
-    });
+    _targetTime = DateTime.now().toString();
+    loadData();
     super.initState();
+  }
+
+  checkSet() async {
+    prefs = await SharedPreferences.getInstance();
+    var check = prefs.getBool('alarmTimeSet') ?? false;
+    if (check) {
+      await Future.delayed(Duration(milliseconds: 500));
+      int penalty = prefs.getInt('penalty') ?? 0;
+      if (penalty == 0) {
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) =>
+                    DetailView(title: "Penalty", detailIndex: 0)));
+        showDialog(
+            context: context,
+            builder: (BuildContext context) => ErrorDialog(
+                  errorMsg: "fill penalty",
+                ));
+      } else {
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => AlarmManager(alarmTime: _alarmTime)));
+      }
+    }
   }
 
   Future<bool> loadData() async {
     prefs = await SharedPreferences.getInstance();
-    _targetTime = (prefs.getString('alarmTime') ?? initTime);
-    if (_targetTime == initTime) {
+    _targetTime = prefs.getString('alarmTime') ?? '';
+    if (_targetTime == '') {
       doesExist = false;
       _alarmTime = DateTime.now();
     } else {
       doesExist = true;
-      print("sharedPreference: $_targetTime");
-      setAlarmTime();
+      // print("sharedPreference: $_targetTime");
     }
-    return true;
+    setState(() {
+      isLoad = true;
+    });
+    checkSet();
   }
 
   // ignore: non_constant_identifier_names
   @override
   Widget build(BuildContext context) {
     final BoxDecoration _boxDecoration = BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(15),
         gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.topRight,
-            colors: [Colors.white, Color.fromARGB(255, 202, 194, 186)]),
+            begin: Alignment.centerLeft,
+            // end: Alignment(0.0, 0.8),
+            end: Alignment.bottomRight,
+            colors: [
+              Color.fromARGB(255, 235, 235, 235),
+              Color.fromARGB(255, 207, 207, 207),
+            ]),
         boxShadow: [
           BoxShadow(
             blurRadius: 6.0,
@@ -64,7 +88,7 @@ class _AlarmTabState extends State<AlarmTab> {
             offset: Offset(5.0, 6.0),
           ),
         ]);
-    print("----------------alarm tab build");
+    // print("----------------alarm tab build");
     Size _size = MediaQuery.of(context).size;
     double _width = _size.width;
     double _height = _size.height;
@@ -73,7 +97,7 @@ class _AlarmTabState extends State<AlarmTab> {
       fontFamily: "AppleSDGothicNeo",
       fontWeight: FontWeight.w800,
       fontSize: 65,
-      color: Color.fromARGB(255, 237, 234, 231),
+      color: Color.fromARGB(255, 235, 235, 235),
     );
 
     TextStyle textStyle = TextStyle(
@@ -139,7 +163,6 @@ class _AlarmTabState extends State<AlarmTab> {
             bottom: _height * 0.1,
             child: GestureDetector(
               onTap: () {
-                setAlarmTime();
                 int penalty = prefs.getInt('penalty') ?? 0;
                 if (penalty == 0) {
                   Navigator.push(
@@ -153,6 +176,8 @@ class _AlarmTabState extends State<AlarmTab> {
                             errorMsg: "fill penalty",
                           ));
                 } else {
+                  print(_alarmTime);
+                  prefs.setBool('alarmTimeSet', true);
                   Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -183,7 +208,7 @@ class _AlarmTabState extends State<AlarmTab> {
       fontFamily: "AppleSDGothicNeo",
       fontWeight: FontWeight.w800,
       fontSize: 85,
-      color: Color.fromARGB(255, 250, 249, 248),
+      color: Color.fromARGB(255, 235, 235, 235),
     );
     TextStyle normalTextStyle = new TextStyle(
       fontFamily: "AppleSDGothicNeo",
@@ -206,11 +231,13 @@ class _AlarmTabState extends State<AlarmTab> {
             itemWidth: _width * 0.32,
             isForce2Digits: true,
             onTimeChange: (time) async {
-              print("onTimeChange");
+              // print("onTimeChange");
               setState(() {
-                _targetTime = DateFormat("HH:mm").format(time);
-                prefs.setString('alarmTime', _targetTime);
-                setAlarmTime();
+                var setAlarm = prefs.getBool('alarmTimeSet');
+                if (!setAlarm)
+                  prefs.setString('alarmTime', time.toString().split('.')[0]);
+                _alarmTime = time;
+                print(_alarmTime);
               });
             },
           )
@@ -222,18 +249,5 @@ class _AlarmTabState extends State<AlarmTab> {
               ),
             ),
           );
-  }
-
-  void setAlarmTime() {
-    _targetDateTime = _date + " " + _targetTime;
-    _alarmTime = DateFormat('yyyy-MM-dd HH:mm').parse(_targetDateTime);
-    print("new alarmTime: $_alarmTime");
-    if (_alarmTime.difference(DateTime.now()).inSeconds <= 0) {
-      DateTime aDayAfter = DateTime.now().add(Duration(days: 1));
-      String _aDayAfterDate = DateFormat('yyyy-MM-dd').format(aDayAfter);
-      _targetDateTime = _aDayAfterDate + " " + _targetTime;
-      _alarmTime = DateFormat('yyyy-MM-dd HH:mm').parse(_targetDateTime);
-      print('changed alarmTime: $_alarmTime');
-    }
   }
 }
